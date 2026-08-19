@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>E-Skids · 4Ch BLE</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:      #080b10;
+  --surface: #0d1117;
+  --border:  #1a2332;
+  --acc:     #00d4ff;
+  --acc2:    #ffb400;
+  --acc3:    #ff6ec7;
+  --acc4:    #7cf29c;
+  --neg:     #ff3860;
+  --text:    #c9d8ea;
+  --dim:     #3d5166;
+  --warn:    #ffd600;
+  --ok:      #00e676;
+  --radius:  12px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body { height:100%; }
+body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace; min-height:100vh; overflow-x:hidden; }
+body::before { content:''; position:fixed; inset:0; z-index:0; background-image:linear-gradient(rgba(0,212,255,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,0.025) 1px,transparent 1px); background-size:32px 32px; pointer-events:none; }
+header { position:relative; z-index:10; display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-bottom:1px solid var(--border); background:rgba(13,17,23,0.95); backdrop-filter:blur(12px); flex-wrap:wrap; gap:10px; }
+.logo { font-family:'Orbitron',monospace; font-size:13px; font-weight:900; letter-spacing:2px; color:var(--acc); text-transform:uppercase; }
+.logo em { color:var(--text); font-style:normal; font-weight:400; }
+.header-right { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+.ble-wrap { display:flex; align-items:center; gap:8px; }
+.dot { width:7px; height:7px; border-radius:50%; background:var(--dim); transition:all 0.3s; }
+.dot.on  { background:var(--ok); box-shadow:0 0 8px var(--ok); animation:blink 2s infinite; }
+.dot.mid { background:var(--warn); box-shadow:0 0 8px var(--warn); animation:blink 0.4s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.ble-lbl { font-size:11px; color:var(--dim); letter-spacing:1px; }
+#btn-ble { background:transparent; border:1px solid var(--acc); color:var(--acc); padding:7px 16px; font-family:'Orbitron',monospace; font-size:10px; letter-spacing:2px; text-transform:uppercase; cursor:pointer; transition:all 0.2s; clip-path:polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%); }
+#btn-ble:hover { background:var(--acc); color:var(--bg); }
+#btn-ble:disabled { opacity:0.3; cursor:not-allowed; }
+.device-name { font-size:11px; color:var(--dim); letter-spacing:1px; padding:4px 10px; border:1px solid var(--border); border-radius:4px; display:none; }
+.device-name.show { display:block; }
+main { position:relative; z-index:1; display:flex; flex-direction:column; gap:16px; padding:16px; max-width:720px; margin:0 auto; }
+.card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:18px; position:relative; overflow:hidden; display:flex; flex-direction:column; gap:14px; }
+.card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent,var(--al),transparent); }
+.card.ch1 { --al: var(--acc); } .card.ch2 { --al: var(--acc2); } .card.ch3 { --al: var(--acc3); } .card.ch4 { --al: var(--acc4); }
+.card-header { display:flex; align-items:center; justify-content:space-between; }
+.card-title { font-family:'Orbitron',monospace; font-size:10px; letter-spacing:3px; color:var(--dim); text-transform:uppercase; }
+.alert-badge { font-size:10px; letter-spacing:2px; padding:3px 8px; border-radius:4px; display:none; }
+.alert-badge.show { display:block; animation:blink 0.5s infinite alternate; }
+.alert-badge.falla { background:rgba(255,56,96,0.15); color:var(--neg); border:1px solid var(--neg); }
+.alert-badge.rango { background:rgba(255,214,0,0.1); color:var(--warn); border:1px solid var(--warn); }
+.gauge-wrap { display:flex; flex-direction:column; align-items:center; gap:8px; }
+.gauge-svg { width:100%; max-width:210px; }
+.gauge-nums { display:flex; gap:26px; justify-content:center; width:100%; }
+.gnum { text-align:center; }
+.gnum .val { font-family:'Orbitron',monospace; font-size:21px; font-weight:700; line-height:1; transition:color 0.3s; }
+.gnum .val.neg { color:var(--neg); }
+.gnum .unit { font-size:10px; color:var(--dim); letter-spacing:2px; margin-top:3px; }
+.chart-wrap { width:100%; }
+.chart-title { font-size:9px; letter-spacing:2px; color:var(--dim); text-transform:uppercase; margin-bottom:6px; }
+canvas.chart { width:100%; height:80px; display:block; }
+.cfg-block { display:flex; flex-direction:column; gap:10px; }
+.cfg-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.cfg-label { font-size:11px; color:var(--dim); letter-spacing:1px; min-width:150px; }
+.cfg-current { font-family:'Orbitron',monospace; font-size:14px; font-weight:700; color:var(--ok); letter-spacing:2px; }
+.cfg-input { background:var(--bg); border:1px solid var(--border); color:var(--text); padding:6px 10px; font-family:'DM Mono',monospace; font-size:12px; width:80px; border-radius:4px; outline:none; transition:border-color 0.2s; }
+.cfg-input.unit { width:60px; }
+.cfg-input:focus { border-color:var(--acc); }
+.cfg-input:disabled { opacity:0.3; cursor:not-allowed; }
+.cfg-unit { font-size:11px; color:var(--dim); }
+.btn-cfg { background:transparent; border:1px solid var(--dim); color:var(--dim); padding:6px 14px; font-family:'Orbitron',monospace; font-size:9px; letter-spacing:2px; text-transform:uppercase; cursor:pointer; transition:all 0.2s; clip-path:polygon(5px 0%,100% 0%,calc(100% - 5px) 100%,0% 100%); }
+.btn-cfg.acc  { border-color:var(--acc); color:var(--acc); }
+.btn-cfg.acc:hover:not(:disabled)  { background:var(--acc); color:var(--bg); }
+.btn-cfg:disabled { opacity:0.3; cursor:not-allowed; }
+.cfg-status { font-size:11px; letter-spacing:1px; min-width:110px; }
+.cfg-status.ok  { color:var(--ok); }
+.cfg-status.err { color:var(--neg); }
+.cfg-status.warn { color:var(--warn); }
+.cfg-hint { font-size:10px; color:var(--dim); letter-spacing:0.5px; line-height:1.6; padding:8px 12px; border-left:2px solid var(--border); margin-top:2px; }
+.cfg-sep { border:none; border-top:1px solid var(--border); margin:14px 0; }
+.log-panel { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px; position:relative; }
+.log-panel::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent,var(--dim),transparent); }
+.log-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:10px; }
+.log-title { font-family:'Orbitron',monospace; font-size:10px; letter-spacing:3px; color:var(--dim); text-transform:uppercase; }
+.log-controls { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.log-count { font-size:11px; color:var(--dim); }
+.btn-log { background:transparent; border:1px solid var(--dim); color:var(--dim); padding:6px 14px; font-family:'Orbitron',monospace; font-size:9px; letter-spacing:2px; text-transform:uppercase; cursor:pointer; transition:all 0.2s; clip-path:polygon(5px 0%,100% 0%,calc(100% - 5px) 100%,0% 100%); }
+.btn-log.active { border-color:var(--ok); color:var(--ok); }
+.btn-log.active:hover { background:var(--ok); color:var(--bg); }
+.btn-log.export { border-color:var(--acc); color:var(--acc); }
+.btn-log.export:hover { background:var(--acc); color:var(--bg); }
+.btn-log.clear { border-color:var(--neg); color:var(--neg); }
+.btn-log.clear:hover { background:var(--neg); color:var(--bg); }
+.log-table-wrap { max-height:240px; overflow-x:auto; overflow-y:auto; }
+.log-table { width:100%; border-collapse:collapse; font-size:10px; font-family:'DM Mono',monospace; white-space:nowrap; }
+.log-table th { text-align:left; padding:5px 7px; color:var(--dim); border-bottom:1px solid var(--border); font-size:9px; letter-spacing:0.5px; position:sticky; top:0; background:var(--surface); }
+.log-table td { padding:4px 7px; color:var(--text); border-bottom:1px solid rgba(26,35,50,0.5); }
+.log-table tr:last-child td { border-bottom:none; }
+.log-empty { text-align:center; color:var(--dim); font-size:11px; padding:24px; }
+#no-ble { position:fixed; inset:0; z-index:100; background:rgba(8,11,16,0.97); display:none; flex-direction:column; align-items:center; justify-content:center; gap:12px; }
+#no-ble h2 { font-family:'Orbitron',monospace; color:var(--neg); letter-spacing:3px; }
+#no-ble p { color:var(--dim); font-size:12px; max-width:340px; text-align:center; line-height:1.8; }
+::-webkit-scrollbar { width:6px; height:6px; }
+::-webkit-scrollbar-track { background:var(--bg); }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+@media(max-width:640px) { .cfg-label { min-width:unset; width:100%; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">E<em>-Skids</em> · 4CH BLE</div>
+  <div class="header-right">
+    <span class="device-name" id="device-name"></span>
+    <div class="ble-wrap"><div class="dot" id="dot"></div><span class="ble-lbl" id="ble-lbl">DESCONECTADO</span></div>
+    <button id="btn-ble">Conectar</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- ===== CH1 ===== -->
+  <div class="card ch1">
+    <div class="card-header"><div class="card-title">// CH1 · 4-20<span style="text-transform:none">mA</span></div><div class="alert-badge" id="alert1"></div></div>
+    <div class="gauge-wrap">
+      <svg class="gauge-svg" viewBox="0 0 220 130">
+        <path id="g1-bg" fill="none" stroke="#1a2332" stroke-width="12" stroke-linecap="round"/>
+        <path id="g1-pos" fill="none" stroke="#00d4ff" stroke-width="12" stroke-linecap="round"/>
+        <line id="g1-needle" x1="110" y1="110" x2="110" y2="46" stroke="white" stroke-width="2" stroke-linecap="round" style="transform-origin:110px 110px;transition:transform 0.4s cubic-bezier(.4,2,.6,1)"/>
+        <circle cx="110" cy="110" r="5" fill="white" opacity="0.7"/>
+        <text x="18" y="124" fill="#3d5166" font-family="DM Mono,monospace" font-size="9">4mA</text>
+        <text x="184" y="124" fill="#00d4ff" font-family="DM Mono,monospace" font-size="9">20mA</text>
+      </svg>
+      <div class="gauge-nums">
+        <div class="gnum"><div class="val" id="val-mA1" style="color:var(--acc)">--.-</div><div class="unit">mA</div></div>
+        <div class="gnum"><div class="val" id="val-eng1" style="color:var(--dim)">--.-</div><div class="unit" id="unit-eng1">u1</div></div>
+      </div>
+    </div>
+    <div class="chart-wrap"><div class="chart-title">// historial CH1</div><canvas class="chart" id="chart1"></canvas></div>
+  </div>
+
+  <!-- ===== CH2 ===== -->
+  <div class="card ch2">
+    <div class="card-header"><div class="card-title">// CH2 · 4-20<span style="text-transform:none">mA</span></div><div class="alert-badge" id="alert2"></div></div>
+    <div class="gauge-wrap">
+      <svg class="gauge-svg" viewBox="0 0 220 130">
+        <path id="g2-bg" fill="none" stroke="#1a2332" stroke-width="12" stroke-linecap="round"/>
+        <path id="g2-pos" fill="none" stroke="#ffb400" stroke-width="12" stroke-linecap="round"/>
+        <line id="g2-needle" x1="110" y1="110" x2="110" y2="46" stroke="white" stroke-width="2" stroke-linecap="round" style="transform-origin:110px 110px;transition:transform 0.4s cubic-bezier(.4,2,.6,1)"/>
+        <circle cx="110" cy="110" r="5" fill="white" opacity="0.7"/>
+        <text x="18" y="124" fill="#3d5166" font-family="DM Mono,monospace" font-size="9">4mA</text>
+        <text x="184" y="124" fill="#ffb400" font-family="DM Mono,monospace" font-size="9">20mA</text>
+      </svg>
+      <div class="gauge-nums">
+        <div class="gnum"><div class="val" id="val-mA2" style="color:var(--acc2)">--.-</div><div class="unit">mA</div></div>
+        <div class="gnum"><div class="val" id="val-eng2" style="color:var(--dim)">--.-</div><div class="unit" id="unit-eng2">u2</div></div>
+      </div>
+    </div>
+    <div class="chart-wrap"><div class="chart-title">// historial CH2</div><canvas class="chart" id="chart2"></canvas></div>
+  </div>
+
+  <!-- ===== CH3 ===== -->
+  <div class="card ch3">
+    <div class="card-header"><div class="card-title">// CH3 · 4-20<span style="text-transform:none">mA</span></div><div class="alert-badge" id="alert3"></div></div>
+    <div class="gauge-wrap">
+      <svg class="gauge-svg" viewBox="0 0 220 130">
+        <path id="g3-bg" fill="none" stroke="#1a2332" stroke-width="12" stroke-linecap="round"/>
+        <path id="g3-pos" fill="none" stroke="#ff6ec7" stroke-width="12" stroke-linecap="round"/>
+        <line id="g3-needle" x1="110" y1="110" x2="110" y2="46" stroke="white" stroke-width="2" stroke-linecap="round" style="transform-origin:110px 110px;transition:transform 0.4s cubic-bezier(.4,2,.6,1)"/>
+        <circle cx="110" cy="110" r="5" fill="white" opacity="0.7"/>
+        <text x="18" y="124" fill="#3d5166" font-family="DM Mono,monospace" font-size="9">4mA</text>
+        <text x="184" y="124" fill="#ff6ec7" font-family="DM Mono,monospace" font-size="9">20mA</text>
+      </svg>
+      <div class="gauge-nums">
+        <div class="gnum"><div class="val" id="val-mA3" style="color:var(--acc3)">--.-</div><div class="unit">mA</div></div>
+        <div class="gnum"><div class="val" id="val-eng3" style="color:var(--dim)">--.-</div><div class="unit" id="unit-eng3">u3</div></div>
+      </div>
+    </div>
+    <div class="chart-wrap"><div class="chart-title">// historial CH3</div><canvas class="chart" id="chart3"></canvas></div>
+  </div>
+
+  <!-- ===== CH4 — Presión ===== -->
+  <div class="card ch4">
+    <div class="card-header"><div class="card-title">// CH4 · Presión</div><div class="alert-badge" id="alert4"></div></div>
+    <div class="gauge-wrap">
+      <svg class="gauge-svg" viewBox="0 0 220 130">
+        <path id="g4-bg" fill="none" stroke="#1a2332" stroke-width="12" stroke-linecap="round"/>
+        <path id="g4-pos" fill="none" stroke="#7cf29c" stroke-width="12" stroke-linecap="round"/>
+        <line id="g4-needle" x1="110" y1="110" x2="110" y2="46" stroke="white" stroke-width="2" stroke-linecap="round" style="transform-origin:110px 110px;transition:transform 0.4s cubic-bezier(.4,2,.6,1)"/>
+        <circle cx="110" cy="110" r="5" fill="white" opacity="0.7"/>
+        <text id="g4-lo" x="18" y="124" fill="#3d5166" font-family="DM Mono,monospace" font-size="9">0</text>
+        <text id="g4-hi" x="184" y="124" fill="#7cf29c" font-family="DM Mono,monospace" font-size="9">150</text>
+      </svg>
+      <div class="gauge-nums">
+        <div class="gnum"><div class="val" id="val-pres" style="color:var(--acc4)">--.-</div><div class="unit" id="unit-pres">psi</div></div>
+      </div>
+    </div>
+    <div class="chart-wrap"><div class="chart-title">// historial presión</div><canvas class="chart" id="chart4"></canvas></div>
+  </div>
+
+  <!-- ===== RANGO Y UNIDAD — CH1/CH2/CH3 (100% local) ===== -->
+  <div class="card">
+    <div class="card-header"><div class="card-title">// Rango y unidad — CH1/CH2/CH3 (local)</div></div>
+    <div class="cfg-block">
+      <div class="cfg-row">
+        <span class="cfg-label">CH1 — 4mA / 20mA:</span>
+        <input type="number" step="any" id="r1-min" class="cfg-input" value="0">
+        <input type="number" step="any" id="r1-max" class="cfg-input" value="100">
+        <input type="text" id="r1-unidad" class="cfg-input unit" value="%" maxlength="8">
+        <button class="btn-cfg acc" id="btn-r1-aplicar">Aplicar</button>
+      </div>
+      <div class="cfg-row">
+        <span class="cfg-label">CH2 — 4mA / 20mA:</span>
+        <input type="number" step="any" id="r2-min" class="cfg-input" value="0">
+        <input type="number" step="any" id="r2-max" class="cfg-input" value="100">
+        <input type="text" id="r2-unidad" class="cfg-input unit" value="%" maxlength="8">
+        <button class="btn-cfg acc" id="btn-r2-aplicar">Aplicar</button>
+      </div>
+      <div class="cfg-row">
+        <span class="cfg-label">CH3 — 4mA / 20mA:</span>
+        <input type="number" step="any" id="r3-min" class="cfg-input" value="0">
+        <input type="number" step="any" id="r3-max" class="cfg-input" value="100">
+        <input type="text" id="r3-unidad" class="cfg-input unit" value="%" maxlength="8">
+        <button class="btn-cfg acc" id="btn-r3-aplicar">Aplicar</button>
+      </div>
+      <p class="cfg-hint">Conversión lineal 4mA→mínimo, 20mA→máximo. Solo afecta esta pantalla — no se envía al ESP32.</p>
+    </div>
+  </div>
+
+  <!-- ===== RANGO DE PRESIÓN — CH4 (escribe al ESP32 por BLE) ===== -->
+  <div class="card">
+    <div class="card-header"><div class="card-title">// Rango de presión — CH4 (BLE)</div><span class="cfg-status" id="range-status"></span></div>
+    <div class="cfg-block">
+      <div class="cfg-row"><span class="cfg-label">Rango actual en ESP32:</span><span class="cfg-current" id="range-current">-- a --</span></div>
+      <div class="cfg-row">
+        <span class="cfg-label">Valor a 0.5V:</span>
+        <input type="number" step="any" id="p-min" class="cfg-input" value="0" disabled>
+        <span class="cfg-label" style="min-width:auto;">Valor a 4.5V:</span>
+        <input type="number" step="any" id="p-max" class="cfg-input" value="150" disabled>
+        <button class="btn-cfg acc" id="btn-range-send" disabled>💾 Guardar en ESP32</button>
+      </div>
+      <div class="cfg-row">
+        <span class="cfg-label">Unidad a mostrar aquí:</span>
+        <input type="text" id="p-unidad" class="cfg-input unit" value="psi" maxlength="8">
+        <span class="cfg-unit">(cosmético — el OLED siempre dice "psi")</span>
+      </div>
+      <p class="cfg-hint">
+        Este rango se guarda en el ESP32 (NVS) y también lo usa la pantalla S4 del OLED — a diferencia
+        de CH1/CH2/CH3. Por defecto 0–150 (sensor de 150 psi); cambia a 0–10 si usas el sensor de 10 psi.
+      </p>
+    </div>
+  </div>
+
+  <div class="log-panel">
+
+    <div class="cfg-block">
+      <div class="log-header" style="margin-bottom:0;"><div class="log-title">// Calibración CH1</div><span class="cfg-status" id="cal1-status"></span></div>
+      <div class="cfg-row" style="margin-top:6px;"><span class="cfg-label">Factor actual:</span><span class="cfg-current" id="cal1-current">--</span></div>
+      <div class="cfg-row"><input type="number" step="0.001" id="cal1-input" class="cfg-input" value="1.000" disabled><button class="btn-cfg acc" id="btn-cal1-send" disabled>💾 Guardar</button></div>
+    </div>
+    <hr class="cfg-sep">
+
+    <div class="cfg-block">
+      <div class="log-header" style="margin-bottom:0;"><div class="log-title">// Calibración CH2</div><span class="cfg-status" id="cal2-status"></span></div>
+      <div class="cfg-row" style="margin-top:6px;"><span class="cfg-label">Factor actual:</span><span class="cfg-current" id="cal2-current">--</span></div>
+      <div class="cfg-row"><input type="number" step="0.001" id="cal2-input" class="cfg-input" value="1.000" disabled><button class="btn-cfg acc" id="btn-cal2-send" disabled>💾 Guardar</button></div>
+    </div>
+    <hr class="cfg-sep">
+
+    <div class="cfg-block">
+      <div class="log-header" style="margin-bottom:0;"><div class="log-title">// Calibración CH3</div><span class="cfg-status" id="cal3-status"></span></div>
+      <div class="cfg-row" style="margin-top:6px;"><span class="cfg-label">Factor actual:</span><span class="cfg-current" id="cal3-current">--</span></div>
+      <div class="cfg-row"><input type="number" step="0.001" id="cal3-input" class="cfg-input" value="1.000" disabled><button class="btn-cfg acc" id="btn-cal3-send" disabled>💾 Guardar</button></div>
+    </div>
+    <hr class="cfg-sep">
+
+    <div class="cfg-block">
+      <div class="log-header" style="margin-bottom:0;"><div class="log-title">// Calibración CH4 (presión)</div><span class="cfg-status" id="cal4-status"></span></div>
+      <div class="cfg-row" style="margin-top:6px;"><span class="cfg-label">Factor actual:</span><span class="cfg-current" id="cal4-current">--</span></div>
+      <div class="cfg-row"><input type="number" step="0.001" id="cal4-input" class="cfg-input" value="1.000" disabled><button class="btn-cfg acc" id="btn-cal4-send" disabled>💾 Guardar</button></div>
+    </div>
+    <hr class="cfg-sep">
+
+    <div class="cfg-block">
+      <div class="log-header" style="margin-bottom:0;"><div class="log-title">// Intervalo de grabado en SD</div><span class="cfg-status" id="cfg-status"></span></div>
+      <div class="cfg-row" style="margin-top:6px;"><span class="cfg-label">Intervalo actual:</span><span class="cfg-current" id="cfg-current">--</span><span class="cfg-unit">seg</span></div>
+      <div class="cfg-row"><input type="number" id="cfg-seg" class="cfg-input" min="1" max="3600" value="1" disabled><span class="cfg-unit">seg (1–3600)</span><button class="btn-cfg acc" id="btn-cfg-send" disabled>💾 Guardar</button></div>
+    </div>
+    <hr class="cfg-sep">
+
+    <div class="cfg-block">
+      <div class="log-header" style="margin-bottom:0;"><div class="log-title">// Fecha y hora del RTC</div><span class="cfg-status" id="time-status"></span></div>
+      <div class="cfg-row" style="margin-top:6px;"><button class="btn-cfg acc" id="btn-time-sync" disabled>🕒 Restablecer Fecha/Hora</button></div>
+    </div>
+    <hr class="cfg-sep">
+
+    <div class="log-header">
+      <div class="log-title">// Datalogger virtual</div>
+      <div class="log-controls">
+        <span class="log-count" id="log-count">0 registros</span>
+        <button class="btn-log active" id="btn-log-toggle">● Grabando</button>
+        <button class="btn-log export" id="btn-export">↓ CSV</button>
+        <button class="btn-log clear" id="btn-clear">✕ Limpiar</button>
+      </div>
+    </div>
+    <div class="log-table-wrap">
+      <table class="log-table">
+        <thead><tr>
+          <th>Hora</th><th>mA1</th><th id="th-eng1">u1</th><th>mA2</th><th id="th-eng2">u2</th><th>mA3</th><th id="th-eng3">u3</th><th id="th-pres">psi</th>
+        </tr></thead>
+        <tbody id="log-tbody"><tr><td colspan="8" class="log-empty">Sin datos — conecta el BLE para comenzar</td></tr></tbody>
+      </table>
+    </div>
+
+  </div>
+
+</main>
+
+<div id="no-ble">
+  <h2>⚠ SIN SOPORTE BLE</h2>
+  <p>Usa Chrome o Edge en Android o PC.<br>Web Bluetooth no funciona en Safari ni Firefox.<br>Asegúrate de estar en HTTPS o localhost.</p>
+</div>
+
+<script>
+const SVC     = '87654321-4321-4321-4321-cba987654321';
+const C_MA1   = '87654321-4321-4321-4321-cba987654301';
+const C_CAL1  = '87654321-4321-4321-4321-cba987654302';
+const C_CFG   = '87654321-4321-4321-4321-cba987654303';
+const C_TIME  = '87654321-4321-4321-4321-cba987654304';
+const C_MA2   = '87654321-4321-4321-4321-cba987654305';
+const C_PRES  = '87654321-4321-4321-4321-cba987654306';
+const C_CAL2  = '87654321-4321-4321-4321-cba987654307';
+const C_RANGE = '87654321-4321-4321-4321-cba987654308';
+const C_MA3   = '87654321-4321-4321-4321-cba987654309';
+const C_CAL3  = '87654321-4321-4321-4321-cba987654310';
+const C_CAL4  = '87654321-4321-4321-4321-cba987654311';
+
+const IMIN=4, IMAX=20, IMA_FALLA=3.6, IMA_SOBRE=21.0, MAX_PTS=60;
+
+let r1min=0,r1max=100,u1='%', r2min=0,r2max=100,u2='%', r3min=0,r3max=100,u3='%';
+let pMin=0, pMax=150, uPres='psi';
+
+function mapEng(mA,mn,mx){ return mn + ((mA-IMIN)/(IMAX-IMIN))*(mx-mn); }
+
+const CX=110, CY=110, R=80;
+function toXY(deg){ const a=deg*Math.PI/180; return {x:CX+R*Math.cos(a), y:CY-R*Math.sin(a)}; }
+function arc(a1,a2){ if(Math.abs(a2-a1)<0.1) return ''; const s=toXY(a1),e=toXY(a2); const large=Math.abs(a2-a1)>180?1:0; const sweep=a2>a1?0:1; return `M${s.x} ${s.y} A${R} ${R} 0 ${large} ${sweep} ${e.x} ${e.y}`; }
+['g1','g2','g3','g4'].forEach(id => document.getElementById(id+'-bg').setAttribute('d', arc(180,0)));
+function updateGauge(prefix, frac) {
+  const clamped = Math.max(0, Math.min(1, frac));
+  const deg = 180 - clamped*180;
+  document.getElementById(prefix+'-needle').style.transform = `rotate(${90-deg}deg)`;
+  document.getElementById(prefix+'-pos').setAttribute('d', arc(180, deg));
+}
+
+let lastMA1=null,lastMA2=null,lastMA3=null,lastPres=null;
+const hist1=[],hist2=[],hist3=[],hist4=[];
+
+function updateChCurrent(n, mA, rmin, rmax) {
+  const clamp01 = (mA-IMIN)/(IMAX-IMIN);
+  updateGauge('g'+n, clamp01);
+  document.getElementById('val-mA'+n).textContent = mA.toFixed(2);
+  const eng = mapEng(mA, rmin, rmax);
+  const el = document.getElementById('val-eng'+n);
+  el.textContent = eng.toFixed(1); el.className = 'val' + (eng<0?' neg':'');
+  const ab = document.getElementById('alert'+n);
+  if (mA < IMA_FALLA) { ab.textContent='FALLA'; ab.className='alert-badge show falla'; }
+  else if (mA > IMA_SOBRE) { ab.textContent='SOBRE-RANGO'; ab.className='alert-badge show rango'; }
+  else ab.className='alert-badge';
+  return eng;
+}
+function updateCh1(mA){ lastMA1=mA; updateChCurrent(1,mA,r1min,r1max); hist1.push(mA); if(hist1.length>MAX_PTS) hist1.shift(); drawChart('chart1',hist1,m=>mapEng(m,r1min,r1max),r1min,r1max,5,u1); }
+function updateCh2(mA){ lastMA2=mA; updateChCurrent(2,mA,r2min,r2max); hist2.push(mA); if(hist2.length>MAX_PTS) hist2.shift(); drawChart('chart2',hist2,m=>mapEng(m,r2min,r2max),r2min,r2max,5,u2); }
+function updateCh3(mA){ lastMA3=mA; updateChCurrent(3,mA,r3min,r3max); hist3.push(mA); if(hist3.length>MAX_PTS) hist3.shift(); drawChart('chart3',hist3,m=>mapEng(m,r3min,r3max),r3min,r3max,5,u3); }
+
+function updateCh4(presion) {
+  lastPres = presion;
+  const frac = (presion - pMin) / (pMax - pMin);
+  updateGauge('g4', frac);
+  document.getElementById('val-pres').textContent = presion.toFixed(1);
+  const ab = document.getElementById('alert4');
+  if (presion < pMin - (pMax-pMin)*0.02) { ab.textContent='BAJO RANGO'; ab.className='alert-badge show rango'; }
+  else if (presion > pMax + (pMax-pMin)*0.02) { ab.textContent='SOBRE-RANGO'; ab.className='alert-badge show rango'; }
+  else ab.className='alert-badge';
+  hist4.push(presion); if (hist4.length>MAX_PTS) hist4.shift();
+  drawChart('chart4', hist4, v=>v, pMin, pMax, 5, uPres);
+}
+
+function aplicarRango(n) {
+  const mn = parseFloat(document.getElementById(`r${n}-min`).value)||0;
+  const mx = parseFloat(document.getElementById(`r${n}-max`).value)||0;
+  const un = document.getElementById(`r${n}-unidad`).value.trim()||'u';
+  if(n===1){r1min=mn;r1max=mx;u1=un;} if(n===2){r2min=mn;r2max=mx;u2=un;} if(n===3){r3min=mn;r3max=mx;u3=un;}
+  document.getElementById(`unit-eng${n}`).textContent = un;
+  document.getElementById(`th-eng${n}`).textContent = un;
+  const last = n===1?lastMA1:n===2?lastMA2:lastMA3;
+  if (last!==null) { if(n===1) updateCh1(last); if(n===2) updateCh2(last); if(n===3) updateCh3(last); }
+  actualizarTablaUnidades();
+}
+document.getElementById('btn-r1-aplicar').addEventListener('click', ()=>aplicarRango(1));
+document.getElementById('btn-r2-aplicar').addEventListener('click', ()=>aplicarRango(2));
+document.getElementById('btn-r3-aplicar').addEventListener('click', ()=>aplicarRango(3));
+
+document.getElementById('p-unidad').addEventListener('input', e => {
+  uPres = e.target.value.trim() || 'u';
+  document.getElementById('unit-pres').textContent = uPres;
+  document.getElementById('th-pres').textContent = uPres;
+});
+
+function drawChart(canvasId, histRaw, mapFn, yMin, yMax, divisiones, unidadEje) {
+  const canvas = document.getElementById(canvasId);
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.offsetWidth, H = canvas.offsetHeight || 80;
+  canvas.width = W*dpr; canvas.height = H*dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(1,0,0,1,0,0); ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,W,H);
+
+  // Escala FIJA al rango configurado (no se autoescala a los datos visibles / sin "zoom")
+  const P = {top:18, right:8, bottom:16, left:38};
+  const gW = W-P.left-P.right, gH = H-P.top-P.bottom;
+
+  // Unidad del eje, arriba a la izquierda
+  ctx.fillStyle = '#5a7080'; ctx.font = '9px DM Mono,monospace'; ctx.textAlign = 'left';
+  ctx.fillText(unidadEje, P.left, 11);
+
+  // Líneas de división: N divisiones = N+1 líneas (incluye los dos extremos)
+  for (let i = 0; i <= divisiones; i++) {
+    const v = yMin + (i/divisiones)*(yMax-yMin);
+    const y = P.top + gH - (i/divisiones)*gH;
+    ctx.strokeStyle = '#1a2332'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(P.left, y); ctx.lineTo(P.left+gW, y); ctx.stroke();
+    ctx.fillStyle = '#5a7080'; ctx.font = '8px DM Mono,monospace'; ctx.textAlign = 'right';
+    ctx.fillText(v.toFixed(v % 1 === 0 ? 0 : 1), P.left-4, y+3);
+  }
+
+  if (histRaw.length < 2) return;
+  const eng = histRaw.map(mapFn);
+
+  function yPix(v) {
+    const clamped = Math.max(yMin, Math.min(yMax, v)); // fija a los bordes si se sale del rango
+    return P.top + gH - ((clamped-yMin)/(yMax-yMin))*gH;
+  }
+
+  const grad = ctx.createLinearGradient(0,P.top,0,P.top+gH);
+  grad.addColorStop(0,'#00d4ff33'); grad.addColorStop(1,'#00d4ff00');
+  ctx.beginPath();
+  eng.forEach((v,i)=>{ const x=P.left+(i/(MAX_PTS-1))*gW; const y=yPix(v); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+  const lx = P.left+((eng.length-1)/(MAX_PTS-1))*gW, baseY = P.top+gH;
+  ctx.lineTo(lx,baseY); ctx.lineTo(P.left,baseY); ctx.closePath(); ctx.fillStyle=grad; ctx.fill();
+
+  ctx.beginPath();
+  eng.forEach((v,i)=>{ const x=P.left+(i/(MAX_PTS-1))*gW; const y=yPix(v); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+  ctx.strokeStyle='#00d4ff'; ctx.lineWidth=1.5; ctx.lineJoin='round'; ctx.stroke();
+
+  const lv=eng[eng.length-1]; const ly=yPix(lv);
+  ctx.beginPath(); ctx.arc(lx,ly,3,0,Math.PI*2); ctx.fillStyle='#00d4ff'; ctx.fill();
+}
+
+const logData = [];
+let grabando = true;
+const LOG_INTERVAL_MS = 3000;
+function horaActual(){ return new Date().toTimeString().slice(0,8); }
+function logSnapshot() {
+  if (!grabando || !bleConectado) return;
+  const mA1=lastMA1??0, mA2=lastMA2??0, mA3=lastMA3??0, pres=lastPres??0;
+  const reg = {
+    hora: horaActual(),
+    mA1: mA1.toFixed(2), eng1: mapEng(mA1,r1min,r1max).toFixed(1),
+    mA2: mA2.toFixed(2), eng2: mapEng(mA2,r2min,r2max).toFixed(1),
+    mA3: mA3.toFixed(2), eng3: mapEng(mA3,r3min,r3max).toFixed(1),
+    pres: pres.toFixed(1)
+  };
+  logData.push(reg); actualizarTabla(reg);
+  document.getElementById('log-count').textContent = logData.length + ' registros';
+}
+setInterval(logSnapshot, LOG_INTERVAL_MS);
+function actualizarTabla(reg) {
+  const tbody = document.getElementById('log-tbody');
+  if (logData.length===1) tbody.innerHTML='';
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td>${reg.hora}</td><td>${reg.mA1}</td><td>${reg.eng1}</td><td>${reg.mA2}</td><td>${reg.eng2}</td><td>${reg.mA3}</td><td>${reg.eng3}</td><td>${reg.pres}</td>`;
+  tbody.appendChild(tr);
+  const wrap = document.querySelector('.log-table-wrap'); wrap.scrollTop = wrap.scrollHeight;
+}
+function actualizarTablaUnidades() {
+  if (logData.length===0) return;
+  logData.forEach(r=>{ r.eng1=mapEng(parseFloat(r.mA1),r1min,r1max).toFixed(1); r.eng2=mapEng(parseFloat(r.mA2),r2min,r2max).toFixed(1); r.eng3=mapEng(parseFloat(r.mA3),r3min,r3max).toFixed(1); });
+  document.getElementById('log-tbody').innerHTML=''; logData.forEach(actualizarTabla);
+}
+document.getElementById('btn-log-toggle').addEventListener('click', () => {
+  grabando = !grabando;
+  const btn = document.getElementById('btn-log-toggle');
+  btn.textContent = grabando ? '● Grabando' : '○ Pausado';
+  btn.className = grabando ? 'btn-log active' : 'btn-log';
+});
+document.getElementById('btn-export').addEventListener('click', () => {
+  if (logData.length===0) { alert('Sin datos para exportar'); return; }
+  const header = `Hora,mA_CH1,${u1}_CH1,mA_CH2,${u2}_CH2,mA_CH3,${u3}_CH3,${uPres}_CH4\n`;
+  const rows = logData.map(r=>`${r.hora},${r.mA1},${r.eng1},${r.mA2},${r.eng2},${r.mA3},${r.eng3},${r.pres}`).join('\n');
+  const blob = new Blob([header+rows], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url;
+  a.download = `eskids_4ch_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+});
+document.getElementById('btn-clear').addEventListener('click', () => {
+  if (!confirm('¿Limpiar todos los registros?')) return;
+  logData.length = 0;
+  document.getElementById('log-tbody').innerHTML = '<tr><td colspan="8" class="log-empty">Sin datos</td></tr>';
+  document.getElementById('log-count').textContent = '0 registros';
+});
+
+function setStatus(id, msg, tipo) {
+  const el = document.getElementById(id);
+  el.textContent = msg; el.className = 'cfg-status '+(tipo||'');
+  if (tipo==='ok') setTimeout(()=>{ el.textContent=''; el.className='cfg-status'; }, 3000);
+}
+function mostrarCal(idxCurrent, idxInput, v) { document.getElementById(idxCurrent).textContent=v.toFixed(3); document.getElementById(idxInput).value=v.toFixed(3); }
+function habilitarCal(idxInput, idxBtn, on, idxCurrent) {
+  document.getElementById(idxInput).disabled = !on;
+  document.getElementById(idxBtn).disabled = !on;
+  if (!on) document.getElementById(idxCurrent).textContent = '--';
+}
+let charCAL1_ble=null, charCAL2_ble=null, charCAL3_ble=null, charCAL4_ble=null;
+function wireCal(n, charGetter) {
+  document.getElementById(`btn-cal${n}-send`).addEventListener('click', async () => {
+    const ch = charGetter();
+    if (!ch) { setStatus(`cal${n}-status`,'Sin conexión BLE','err'); return; }
+    const v = parseFloat(document.getElementById(`cal${n}-input`).value);
+    if (isNaN(v)||v<=0||v>=10) { setStatus(`cal${n}-status`,'⚠ Rango: 0–10','warn'); return; }
+    const buf = new ArrayBuffer(4); new DataView(buf).setFloat32(0,v,true);
+    try { await ch.writeValue(buf); mostrarCal(`cal${n}-current`,`cal${n}-input`,v); setStatus(`cal${n}-status`,'✅ Guardado','ok'); }
+    catch(e){ setStatus(`cal${n}-status`,'❌ Error','err'); }
+  });
+}
+wireCal(1, ()=>charCAL1_ble); wireCal(2, ()=>charCAL2_ble); wireCal(3, ()=>charCAL3_ble); wireCal(4, ()=>charCAL4_ble);
+
+let charCFG_ble = null;
+function mostrarIntervaloEsp(ms) { const seg=ms/1000; document.getElementById('cfg-current').textContent = seg%1===0?seg:seg.toFixed(1); document.getElementById('cfg-seg').value = Math.round(seg); }
+function habilitarCfg(on) { document.getElementById('cfg-seg').disabled=!on; document.getElementById('btn-cfg-send').disabled=!on; if(!on) document.getElementById('cfg-current').textContent='--'; }
+document.getElementById('btn-cfg-send').addEventListener('click', async () => {
+  if (!charCFG_ble) { setStatus('cfg-status','Sin conexión BLE','err'); return; }
+  const seg = parseInt(document.getElementById('cfg-seg').value);
+  if (isNaN(seg)||seg<1||seg>3600) { setStatus('cfg-status','⚠ Rango: 1–3600 seg','warn'); return; }
+  const ms = seg*1000;
+  const buf = new ArrayBuffer(4); new DataView(buf).setUint32(0,ms,true);
+  try { await charCFG_ble.writeValue(buf); mostrarIntervaloEsp(ms); setStatus('cfg-status','✅ Guardado','ok'); }
+  catch(e){ setStatus('cfg-status','❌ Error','err'); }
+});
+
+let charRANGE_ble = null;
+function mostrarRangoEsp(mn, mx) {
+  pMin=mn; pMax=mx;
+  document.getElementById('range-current').textContent = `${mn.toFixed(1)} a ${mx.toFixed(1)}`;
+  document.getElementById('p-min').value = mn; document.getElementById('p-max').value = mx;
+  document.getElementById('g4-lo').textContent = mn; document.getElementById('g4-hi').textContent = mx;
+  if (lastPres !== null) updateCh4(lastPres);
+}
+function habilitarRange(on) {
+  document.getElementById('p-min').disabled=!on; document.getElementById('p-max').disabled=!on;
+  document.getElementById('btn-range-send').disabled=!on;
+  if (!on) document.getElementById('range-current').textContent = '-- a --';
+}
+document.getElementById('btn-range-send').addEventListener('click', async () => {
+  if (!charRANGE_ble) { setStatus('range-status','Sin conexión BLE','err'); return; }
+  const mn = parseFloat(document.getElementById('p-min').value);
+  const mx = parseFloat(document.getElementById('p-max').value);
+  if (isNaN(mn)||isNaN(mx)||mx<=mn) { setStatus('range-status','⚠ Máximo debe ser > mínimo','warn'); return; }
+  const buf = new ArrayBuffer(8); const dv = new DataView(buf); dv.setFloat32(0,mn,true); dv.setFloat32(4,mx,true);
+  try { await charRANGE_ble.writeValue(buf); mostrarRangoEsp(mn,mx); setStatus('range-status','✅ Guardado en ESP32 (y en el OLED)','ok'); }
+  catch(e){ setStatus('range-status','❌ Error','err'); }
+});
+
+let charTIME_ble = null;
+function habilitarTime(on){ document.getElementById('btn-time-sync').disabled = !on; }
+document.getElementById('btn-time-sync').addEventListener('click', async () => {
+  if (!charTIME_ble) { setStatus('time-status','Sin conexión BLE','err'); return; }
+  const ahora = new Date();
+  const epochLocal = Math.floor(ahora.getTime()/1000) - (ahora.getTimezoneOffset()*60);
+  const buf = new ArrayBuffer(4); new DataView(buf).setUint32(0,epochLocal,true);
+  try { await charTIME_ble.writeValue(buf); setStatus('time-status','✅ Sincronizado','ok'); }
+  catch(e){ setStatus('time-status','❌ Error','err'); }
+});
+
+let device = null;
+let bleConectado = false;
+function setBleStatus(s, name) {
+  document.getElementById('dot').className = 'dot'+(s==='on'?' on':s==='mid'?' mid':'');
+  document.getElementById('ble-lbl').textContent = s==='on'?'CONECTADO':s==='mid'?'CONECTANDO...':'DESCONECTADO';
+  const btn = document.getElementById('btn-ble');
+  btn.textContent = s==='on'?'Desconectar':'Conectar'; btn.disabled = s==='mid';
+  const dn = document.getElementById('device-name');
+  if (s==='on'&&name) { dn.textContent=name; dn.classList.add('show'); } else { dn.textContent=''; dn.classList.remove('show'); }
+  if (s !== 'on') {
+    charCAL1_ble=null; habilitarCal('cal1-input','btn-cal1-send',false,'cal1-current');
+    charCAL2_ble=null; habilitarCal('cal2-input','btn-cal2-send',false,'cal2-current');
+    charCAL3_ble=null; habilitarCal('cal3-input','btn-cal3-send',false,'cal3-current');
+    charCAL4_ble=null; habilitarCal('cal4-input','btn-cal4-send',false,'cal4-current');
+    charCFG_ble=null; habilitarCfg(false);
+    charTIME_ble=null; habilitarTime(false);
+    charRANGE_ble=null; habilitarRange(false);
+  }
+}
+
+document.getElementById('btn-ble').addEventListener('click', async () => {
+  if (device && device.gatt.connected) { device.gatt.disconnect(); return; }
+  try {
+    setBleStatus('mid');
+    device = await navigator.bluetooth.requestDevice({ filters:[{ services:[SVC] }] });
+    device.addEventListener('gattserverdisconnected', () => { bleConectado=false; setBleStatus('off'); });
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(SVC);
+
+    const cMA1 = await service.getCharacteristic(C_MA1); await cMA1.startNotifications();
+    cMA1.addEventListener('characteristicvaluechanged', e => updateCh1(e.target.value.getFloat32(0,true)));
+    const cMA2 = await service.getCharacteristic(C_MA2); await cMA2.startNotifications();
+    cMA2.addEventListener('characteristicvaluechanged', e => updateCh2(e.target.value.getFloat32(0,true)));
+    const cMA3 = await service.getCharacteristic(C_MA3); await cMA3.startNotifications();
+    cMA3.addEventListener('characteristicvaluechanged', e => updateCh3(e.target.value.getFloat32(0,true)));
+    const cPRES = await service.getCharacteristic(C_PRES); await cPRES.startNotifications();
+    cPRES.addEventListener('characteristicvaluechanged', e => updateCh4(e.target.value.getFloat32(0,true)));
+
+    try { charCAL1_ble = await service.getCharacteristic(C_CAL1); const v=await charCAL1_ble.readValue(); mostrarCal('cal1-current','cal1-input',v.getFloat32(0,true)); habilitarCal('cal1-input','btn-cal1-send',true,'cal1-current'); } catch(e){ setStatus('cal1-status','No disponible','warn'); }
+    try { charCAL2_ble = await service.getCharacteristic(C_CAL2); const v=await charCAL2_ble.readValue(); mostrarCal('cal2-current','cal2-input',v.getFloat32(0,true)); habilitarCal('cal2-input','btn-cal2-send',true,'cal2-current'); } catch(e){ setStatus('cal2-status','No disponible','warn'); }
+    try { charCAL3_ble = await service.getCharacteristic(C_CAL3); const v=await charCAL3_ble.readValue(); mostrarCal('cal3-current','cal3-input',v.getFloat32(0,true)); habilitarCal('cal3-input','btn-cal3-send',true,'cal3-current'); } catch(e){ setStatus('cal3-status','No disponible','warn'); }
+    try { charCAL4_ble = await service.getCharacteristic(C_CAL4); const v=await charCAL4_ble.readValue(); mostrarCal('cal4-current','cal4-input',v.getFloat32(0,true)); habilitarCal('cal4-input','btn-cal4-send',true,'cal4-current'); } catch(e){ setStatus('cal4-status','No disponible','warn'); }
+    try { charCFG_ble = await service.getCharacteristic(C_CFG); const v=await charCFG_ble.readValue(); mostrarIntervaloEsp(v.getUint32(0,true)); habilitarCfg(true); } catch(e){ setStatus('cfg-status','No disponible','warn'); }
+    try { charTIME_ble = await service.getCharacteristic(C_TIME); habilitarTime(true); } catch(e){ setStatus('time-status','No disponible','warn'); }
+    try { charRANGE_ble = await service.getCharacteristic(C_RANGE); const v=await charRANGE_ble.readValue(); mostrarRangoEsp(v.getFloat32(0,true), v.getFloat32(4,true)); habilitarRange(true); } catch(e){ setStatus('range-status','No disponible','warn'); }
+
+    bleConectado = true;
+    setBleStatus('on', device.name);
+  } catch (e) { console.warn(e); bleConectado=false; setBleStatus('off'); }
+});
+
+if (!navigator.bluetooth) document.getElementById('no-ble').style.display = 'flex';
+
+aplicarRango(1); aplicarRango(2); aplicarRango(3);
+document.getElementById('unit-pres').textContent = uPres;
+document.getElementById('th-pres').textContent = uPres;
+window.addEventListener('resize', () => {
+  drawChart('chart1',hist1,m=>mapEng(m,r1min,r1max),r1min,r1max,5,u1);
+  drawChart('chart2',hist2,m=>mapEng(m,r2min,r2max),r2min,r2max,5,u2);
+  drawChart('chart3',hist3,m=>mapEng(m,r3min,r3max),r3min,r3max,5,u3);
+  drawChart('chart4',hist4,v=>v,pMin,pMax,5,uPres);
+});
+</script>
+</body>
+</html>
